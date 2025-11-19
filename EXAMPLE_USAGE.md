@@ -1,6 +1,6 @@
 # Example Usage of Administrate GraphQL Client
 
-This document provides examples of how to use the generated GraphQL client library.
+This document provides Spring Boot test examples of how to use the generated GraphQL client library.
 
 ## Prerequisites
 
@@ -13,16 +13,25 @@ This document provides examples of how to use the generated GraphQL client libra
 </dependency>
 ```
 
-2. Configure the GraphQL endpoint in your `application.properties` or `application.yml`:
+2. Add Spring Boot Test dependencies:
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+3. Configure the GraphQL endpoint in your `src/test/resources/application.properties` or `src/test/resources/application.yml`:
 ```properties
 # The GraphQL endpoint URL
 graphql.client.url=http://your-graphql-server.com/graphql
 ```
 
-## Example 1: Query All Course Templates
+## Example 1: Query All Course Templates (Spring Boot Test)
 
 ```java
-package com.example.service;
+package com.example.test;
 
 import com.fsi.tm2poc.graphql.client.CourseTemplate;
 import com.fsi.tm2poc.graphql.client.CourseTemplateConnection;
@@ -31,25 +40,25 @@ import com.fsi.tm2poc.graphql.client.Query;
 import com.fsi.tm2poc.graphql.client.util.QueryExecutor;
 import com.graphql_java_generator.exception.GraphQLRequestExecutionException;
 import com.graphql_java_generator.exception.GraphQLRequestPreparationException;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@Service
-public class CourseTemplateService {
+import static org.junit.jupiter.api.Assertions.*;
+
+@SpringBootTest
+class CourseTemplateQueryTest {
 
     @Autowired
     private QueryExecutor queryExecutor;
 
-    /**
-     * Retrieve all course templates
-     * @return List of all course templates
-     */
-    public List<CourseTemplate> getAllCourseTemplates() 
+    @Test
+    void testGetAllCourseTemplates() 
             throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
         
         // Define the GraphQL query
@@ -59,24 +68,32 @@ public class CourseTemplateService {
         // Execute the query (no parameters needed for this simple query)
         Query response = queryExecutor.execWithBindValues(query, new HashMap<>());
         
+        // Assert that the response is not null
+        assertNotNull(response);
+        assertNotNull(response.getCourseTemplates());
+        
         // Extract the course templates from the response
         CourseTemplateConnection connection = response.getCourseTemplates();
-        if (connection == null || connection.getEdges() == null) {
-            return List.of();
-        }
+        assertNotNull(connection);
         
-        return connection.getEdges().stream()
-                .map(CourseTemplateEdge::getNode)
-                .collect(Collectors.toList());
+        List<CourseTemplate> templates = connection.getEdges() != null
+                ? connection.getEdges().stream()
+                        .map(CourseTemplateEdge::getNode)
+                        .collect(Collectors.toList())
+                : List.of();
+        
+        // Assert that we got results (or empty list if none exist)
+        assertNotNull(templates);
+        
+        // Print results for debugging
+        System.out.println("Found " + templates.size() + " course templates");
+        templates.forEach(template -> 
+            System.out.println("Template: " + template.getName() + " (ID: " + template.getId() + ")")
+        );
     }
 
-    /**
-     * Retrieve course templates with pagination
-     * @param first Maximum number of results to return
-     * @param offset Number of results to skip
-     * @return List of course templates
-     */
-    public List<CourseTemplate> getCourseTemplates(int first, int offset) 
+    @Test
+    void testGetCourseTemplatesWithPagination() 
             throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
         
         // Define the GraphQL query with parameters
@@ -84,29 +101,44 @@ public class CourseTemplateService {
         
         // Set up parameters
         Map<String, Object> parameters = new HashMap<>();
-        parameters.put("first", first);
-        parameters.put("offset", offset);
+        parameters.put("first", 10);
+        parameters.put("offset", 0);
         
         // Execute the query
         Query response = queryExecutor.execWithBindValues(query, parameters);
         
+        // Assert response
+        assertNotNull(response);
+        assertNotNull(response.getCourseTemplates());
+        
         // Extract results
         CourseTemplateConnection connection = response.getCourseTemplates();
-        if (connection == null || connection.getEdges() == null) {
-            return List.of();
-        }
+        assertNotNull(connection);
+        assertNotNull(connection.getPageInfo());
         
-        return connection.getEdges().stream()
-                .map(CourseTemplateEdge::getNode)
-                .collect(Collectors.toList());
+        List<CourseTemplate> templates = connection.getEdges() != null
+                ? connection.getEdges().stream()
+                        .map(CourseTemplateEdge::getNode)
+                        .collect(Collectors.toList())
+                : List.of();
+        
+        // Assert pagination info
+        assertNotNull(connection.getPageInfo());
+        assertNotNull(connection.getPageInfo().getHasNextPage());
+        assertNotNull(connection.getPageInfo().getHasPreviousPage());
+        
+        // Assert we got at most 10 results
+        assertTrue(templates.size() <= 10, "Should return at most 10 results");
+        
+        System.out.println("Retrieved " + templates.size() + " course templates with pagination");
     }
 }
 ```
 
-## Example 2: Create a Course Template (Mutation)
+## Example 2: Create a Course Template (Mutation - Spring Boot Test)
 
 ```java
-package com.example.service;
+package com.example.test;
 
 import com.fsi.tm2poc.graphql.client.CourseTemplate;
 import com.fsi.tm2poc.graphql.client.CourseTemplateCreateInput;
@@ -116,44 +148,32 @@ import com.fsi.tm2poc.graphql.client.Mutation;
 import com.fsi.tm2poc.graphql.client.util.MutationExecutor;
 import com.graphql_java_generator.exception.GraphQLRequestExecutionException;
 import com.graphql_java_generator.exception.GraphQLRequestPreparationException;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-@Service
-public class CourseTemplateMutationService {
+import static org.junit.jupiter.api.Assertions.*;
+
+@SpringBootTest
+class CourseTemplateMutationTest {
 
     @Autowired
     private MutationExecutor mutationExecutor;
 
-    /**
-     * Create a new course template
-     * @param name Required course template name
-     * @param description Optional description
-     * @param code Optional code
-     * @param title Optional title
-     * @param learningMode Optional learning mode (CLASSROOM, LMS, BLENDED, VIRTUAL)
-     * @return The created course template, or null if there were errors
-     * @throws RuntimeException if there are validation errors
-     */
-    public CourseTemplate createCourseTemplate(
-            String name,
-            String description,
-            String code,
-            String title,
-            LearningMode learningMode) 
+    @Test
+    void testCreateCourseTemplate() 
             throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
         
         // Build the input object using the builder pattern
         CourseTemplateCreateInput input = CourseTemplateCreateInput.builder()
-                .withName(name)
-                .withDescription(description)
-                .withCode(code)
-                .withTitle(title)
-                .withLearningMode(learningMode)
+                .withName("Test Course Template")
+                .withDescription("A test course template created from Spring Boot test")
+                .withCode("TEST-001")
+                .withTitle("Test Course")
+                .withLearningMode(LearningMode.LMS)
                 .build();
         
         // Define the GraphQL mutation
@@ -167,11 +187,15 @@ public class CourseTemplateMutationService {
         // Execute the mutation
         Mutation response = mutationExecutor.execWithBindValues(mutation, parameters);
         
+        // Assert response is not null
+        assertNotNull(response);
+        
         // Extract the response
         CourseTemplateMutateResponse mutateResponse = response.getCreateCourseTemplate();
+        assertNotNull(mutateResponse);
         
         // Check for errors
-        if (mutateResponse != null && mutateResponse.getErrors() != null && !mutateResponse.getErrors().isEmpty()) {
+        if (mutateResponse.getErrors() != null && !mutateResponse.getErrors().isEmpty()) {
             // Handle errors
             StringBuilder errorMessage = new StringBuilder("Failed to create course template: ");
             mutateResponse.getErrors().forEach(error -> 
@@ -180,43 +204,81 @@ public class CourseTemplateMutationService {
                     .append(error.getMessage())
                     .append("; ")
             );
-            throw new RuntimeException(errorMessage.toString());
+            fail(errorMessage.toString());
         }
         
-        // Return the created course template
-        return mutateResponse != null ? mutateResponse.getCourseTemplate() : null;
+        // Assert the course template was created
+        CourseTemplate createdTemplate = mutateResponse.getCourseTemplate();
+        assertNotNull(createdTemplate, "Course template should be created");
+        assertNotNull(createdTemplate.getId(), "Created template should have an ID");
+        assertEquals("Test Course Template", createdTemplate.getName());
+        assertEquals("A test course template created from Spring Boot test", createdTemplate.getDescription());
+        assertEquals("TEST-001", createdTemplate.getCode());
+        assertEquals(LearningMode.LMS, createdTemplate.getLearningMode());
+        
+        System.out.println("Successfully created course template with ID: " + createdTemplate.getId());
     }
 
-    /**
-     * Simplified version using only required fields
-     */
-    public CourseTemplate createCourseTemplate(String name) 
+    @Test
+    void testCreateCourseTemplateWithRequiredFieldsOnly() 
             throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
-        return createCourseTemplate(name, null, null, null, null);
+        
+        // Build input with only required fields
+        CourseTemplateCreateInput input = CourseTemplateCreateInput.builder()
+                .withName("Minimal Course Template")
+                .build();
+        
+        String mutation = "{ createCourseTemplate(input: ?input) { courseTemplate { id name description code title learningMode lifecycleState } errors { field message } } }";
+        
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("input", input);
+        
+        Mutation response = mutationExecutor.execWithBindValues(mutation, parameters);
+        
+        assertNotNull(response);
+        CourseTemplateMutateResponse mutateResponse = response.getCreateCourseTemplate();
+        assertNotNull(mutateResponse);
+        
+        // Check for errors
+        if (mutateResponse.getErrors() != null && !mutateResponse.getErrors().isEmpty()) {
+            mutateResponse.getErrors().forEach(error -> 
+                System.err.println("Error: " + error.getField() + " - " + error.getMessage())
+            );
+            fail("Mutation should not have errors");
+        }
+        
+        CourseTemplate createdTemplate = mutateResponse.getCourseTemplate();
+        assertNotNull(createdTemplate);
+        assertEquals("Minimal Course Template", createdTemplate.getName());
+        
+        System.out.println("Successfully created minimal course template with ID: " + createdTemplate.getId());
     }
 }
 ```
 
-## Example 3: Complete Service Class with Both Queries and Mutations
+## Example 3: Complete Test Class with Both Queries and Mutations
 
 ```java
-package com.example.service;
+package com.example.test;
 
 import com.fsi.tm2poc.graphql.client.*;
 import com.fsi.tm2poc.graphql.client.util.MutationExecutor;
 import com.fsi.tm2poc.graphql.client.util.QueryExecutor;
 import com.graphql_java_generator.exception.GraphQLRequestExecutionException;
 import com.graphql_java_generator.exception.GraphQLRequestPreparationException;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@Service
-public class CourseTemplateService {
+import static org.junit.jupiter.api.Assertions.*;
+
+@SpringBootTest
+class CourseTemplateIntegrationTest {
 
     @Autowired
     private QueryExecutor queryExecutor;
@@ -224,54 +286,153 @@ public class CourseTemplateService {
     @Autowired
     private MutationExecutor mutationExecutor;
 
-    /**
-     * Get all course templates
-     */
-    public List<CourseTemplate> getAllCourseTemplates() 
+    @Test
+    void testGetAllCourseTemplates() 
             throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
         String query = "{ courseTemplates { edges { node { id name description code title learningMode lifecycleState createdAt updatedAt } } } }";
         Query response = queryExecutor.execWithBindValues(query, new HashMap<>());
+        
+        assertNotNull(response);
         CourseTemplateConnection connection = response.getCourseTemplates();
-        if (connection == null || connection.getEdges() == null) {
-            return List.of();
-        }
-        return connection.getEdges().stream()
-                .map(CourseTemplateEdge::getNode)
-                .collect(Collectors.toList());
+        assertNotNull(connection);
+        
+        List<CourseTemplate> templates = connection.getEdges() != null
+                ? connection.getEdges().stream()
+                        .map(CourseTemplateEdge::getNode)
+                        .collect(Collectors.toList())
+                : List.of();
+        
+        assertNotNull(templates);
+        System.out.println("Retrieved " + templates.size() + " course templates");
     }
 
-    /**
-     * Get a single course template by ID
-     */
-    public CourseTemplate getCourseTemplateById(String id) 
+    @Test
+    void testGetCourseTemplateById() 
             throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
+        // First, create a course template to get its ID
+        CourseTemplate created = createTestCourseTemplate();
+        assertNotNull(created);
+        String templateId = created.getId();
+        
+        // Now query by ID
         String query = "{ courseTemplate(id: ?id) { id name description code title learningMode lifecycleState createdAt updatedAt } }";
         Map<String, Object> parameters = new HashMap<>();
-        parameters.put("id", id);
+        parameters.put("id", templateId);
+        
         Query response = queryExecutor.execWithBindValues(query, parameters);
-        return response.getCourseTemplate();
+        
+        assertNotNull(response);
+        CourseTemplate template = response.getCourseTemplate();
+        assertNotNull(template);
+        assertEquals(templateId, template.getId());
+        assertEquals(created.getName(), template.getName());
+        
+        System.out.println("Successfully retrieved course template by ID: " + templateId);
+    }
+
+    @Test
+    void testCreateAndUpdateCourseTemplate() 
+            throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
+        
+        // Create a course template
+        CourseTemplate created = createTestCourseTemplate();
+        assertNotNull(created);
+        String templateId = created.getId();
+        
+        // Update the course template
+        CourseTemplateUpdateInput updateInput = CourseTemplateUpdateInput.builder()
+                .withId(templateId)
+                .withName("Updated Course Template Name")
+                .withDescription("Updated description")
+                .withCode("UPDATED-001")
+                .withTitle("Updated Title")
+                .withLearningMode(LearningMode.BLENDED)
+                .build();
+        
+        String mutation = "{ updateCourseTemplate(input: ?input) { courseTemplate { id name description code title learningMode lifecycleState createdAt updatedAt } errors { field message } } }";
+        
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("input", updateInput);
+        
+        Mutation response = mutationExecutor.execWithBindValues(mutation, parameters);
+        CourseTemplateMutateResponse mutateResponse = response.getUpdateCourseTemplate();
+        
+        assertNotNull(mutateResponse);
+        
+        // Check for errors
+        if (mutateResponse.getErrors() != null && !mutateResponse.getErrors().isEmpty()) {
+            mutateResponse.getErrors().forEach(error -> 
+                System.err.println("Error: " + error.getField() + " - " + error.getMessage())
+            );
+            fail("Update should not have errors");
+        }
+        
+        CourseTemplate updated = mutateResponse.getCourseTemplate();
+        assertNotNull(updated);
+        assertEquals(templateId, updated.getId());
+        assertEquals("Updated Course Template Name", updated.getName());
+        assertEquals("Updated description", updated.getDescription());
+        assertEquals(LearningMode.BLENDED, updated.getLearningMode());
+        
+        System.out.println("Successfully updated course template: " + updated.getName());
+    }
+
+    @Test
+    void testFullWorkflow() 
+            throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
+        
+        // 1. Create a course template
+        CourseTemplate created = createTestCourseTemplate();
+        assertNotNull(created);
+        String templateId = created.getId();
+        System.out.println("Created template with ID: " + templateId);
+        
+        // 2. Query it by ID
+        String query = "{ courseTemplate(id: ?id) { id name description code title learningMode lifecycleState } }";
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", templateId);
+        
+        Query response = queryExecutor.execWithBindValues(query, params);
+        CourseTemplate queried = response.getCourseTemplate();
+        assertNotNull(queried);
+        assertEquals(templateId, queried.getId());
+        System.out.println("Queried template: " + queried.getName());
+        
+        // 3. Update it
+        CourseTemplateUpdateInput updateInput = CourseTemplateUpdateInput.builder()
+                .withId(templateId)
+                .withName("Workflow Test Template")
+                .build();
+        
+        String mutation = "{ updateCourseTemplate(input: ?input) { courseTemplate { id name } errors { field message } } }";
+        Map<String, Object> mutationParams = new HashMap<>();
+        mutationParams.put("input", updateInput);
+        
+        Mutation mutationResponse = mutationExecutor.execWithBindValues(mutation, mutationParams);
+        CourseTemplateMutateResponse updateResponse = mutationResponse.getUpdateCourseTemplate();
+        assertNotNull(updateResponse);
+        assertNull(updateResponse.getErrors() || updateResponse.getErrors().isEmpty() ? null : updateResponse.getErrors());
+        
+        CourseTemplate updated = updateResponse.getCourseTemplate();
+        assertNotNull(updated);
+        assertEquals("Workflow Test Template", updated.getName());
+        System.out.println("Updated template: " + updated.getName());
     }
 
     /**
-     * Create a new course template
+     * Helper method to create a test course template
      */
-    public CourseTemplate createCourseTemplate(
-            String name,
-            String description,
-            String code,
-            String title,
-            LearningMode learningMode) 
+    private CourseTemplate createTestCourseTemplate() 
             throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
-        
         CourseTemplateCreateInput input = CourseTemplateCreateInput.builder()
-                .withName(name)
-                .withDescription(description)
-                .withCode(code)
-                .withTitle(title)
-                .withLearningMode(learningMode)
+                .withName("Test Course Template " + System.currentTimeMillis())
+                .withDescription("A test course template")
+                .withCode("TEST-" + System.currentTimeMillis())
+                .withTitle("Test Course")
+                .withLearningMode(LearningMode.LMS)
                 .build();
         
-        String mutation = "{ createCourseTemplate(input: ?input) { courseTemplate { id name description code title learningMode lifecycleState createdAt updatedAt } errors { field message } } }";
+        String mutation = "{ createCourseTemplate(input: ?input) { courseTemplate { id name description code title learningMode lifecycleState } errors { field message } } }";
         
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("input", input);
@@ -279,114 +440,74 @@ public class CourseTemplateService {
         Mutation response = mutationExecutor.execWithBindValues(mutation, parameters);
         CourseTemplateMutateResponse mutateResponse = response.getCreateCourseTemplate();
         
-        // Check for errors
-        if (mutateResponse != null && mutateResponse.getErrors() != null && !mutateResponse.getErrors().isEmpty()) {
-            StringBuilder errorMessage = new StringBuilder("Failed to create course template: ");
-            mutateResponse.getErrors().forEach(error -> 
-                errorMessage.append(error.getField())
-                    .append(": ")
-                    .append(error.getMessage())
-                    .append("; ")
-            );
-            throw new RuntimeException(errorMessage.toString());
+        if (mutateResponse.getErrors() != null && !mutateResponse.getErrors().isEmpty()) {
+            fail("Failed to create test course template: " + mutateResponse.getErrors());
         }
         
-        return mutateResponse != null ? mutateResponse.getCourseTemplate() : null;
-    }
-
-    /**
-     * Update an existing course template
-     */
-    public CourseTemplate updateCourseTemplate(
-            String id,
-            String name,
-            String description,
-            String code,
-            String title,
-            LearningMode learningMode) 
-            throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
-        
-        CourseTemplateUpdateInput input = CourseTemplateUpdateInput.builder()
-                .withId(id)
-                .withName(name)
-                .withDescription(description)
-                .withCode(code)
-                .withTitle(title)
-                .withLearningMode(learningMode)
-                .build();
-        
-        String mutation = "{ updateCourseTemplate(input: ?input) { courseTemplate { id name description code title learningMode lifecycleState createdAt updatedAt } errors { field message } } }";
-        
-        Map<String, Object> parameters = new HashMap<>();
-        parameters.put("input", input);
-        
-        Mutation response = mutationExecutor.execWithBindValues(mutation, parameters);
-        CourseTemplateMutateResponse mutateResponse = response.getUpdateCourseTemplate();
-        
-        // Check for errors
-        if (mutateResponse != null && mutateResponse.getErrors() != null && !mutateResponse.getErrors().isEmpty()) {
-            StringBuilder errorMessage = new StringBuilder("Failed to update course template: ");
-            mutateResponse.getErrors().forEach(error -> 
-                errorMessage.append(error.getField())
-                    .append(": ")
-                    .append(error.getMessage())
-                    .append("; ")
-            );
-            throw new RuntimeException(errorMessage.toString());
-        }
-        
-        return mutateResponse != null ? mutateResponse.getCourseTemplate() : null;
+        return mutateResponse.getCourseTemplate();
     }
 }
 ```
 
-## Example 4: Using in a REST Controller
+## Example 4: Test Configuration
+
+Create a test configuration file at `src/test/resources/application.properties`:
+
+```properties
+# GraphQL endpoint URL for testing
+graphql.client.url=http://localhost:8080/graphql
+
+# Optional: Configure logging for debugging
+logging.level.com.fsi.tm2poc.graphql=DEBUG
+logging.level.com.graphql_java_generator=DEBUG
+```
+
+Or using YAML format at `src/test/resources/application.yml`:
+
+```yaml
+graphql:
+  client:
+    url: http://localhost:8080/graphql
+
+logging:
+  level:
+    com.fsi.tm2poc.graphql: DEBUG
+    com.graphql_java_generator: DEBUG
+```
+
+## Example 5: Using @TestPropertySource for Test-Specific Configuration
 
 ```java
-package com.example.controller;
+package com.example.test;
 
-import com.example.service.CourseTemplateService;
-import com.fsi.tm2poc.graphql.client.CourseTemplate;
-import com.fsi.tm2poc.graphql.client.LearningMode;
+import com.fsi.tm2poc.graphql.client.Query;
+import com.fsi.tm2poc.graphql.client.util.QueryExecutor;
 import com.graphql_java_generator.exception.GraphQLRequestExecutionException;
 import com.graphql_java_generator.exception.GraphQLRequestPreparationException;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 
-import java.util.List;
+import java.util.HashMap;
 
-@RestController
-@RequestMapping("/api/course-templates")
-public class CourseTemplateController {
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+@SpringBootTest
+@TestPropertySource(properties = {
+    "graphql.client.url=http://localhost:8080/graphql"
+})
+class CourseTemplateWithCustomConfigTest {
 
     @Autowired
-    private CourseTemplateService courseTemplateService;
+    private QueryExecutor queryExecutor;
 
-    @GetMapping
-    public ResponseEntity<List<CourseTemplate>> getAllCourseTemplates() {
-        try {
-            List<CourseTemplate> templates = courseTemplateService.getAllCourseTemplates();
-            return ResponseEntity.ok(templates);
-        } catch (GraphQLRequestExecutionException | GraphQLRequestPreparationException e) {
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    @PostMapping
-    public ResponseEntity<CourseTemplate> createCourseTemplate(
-            @RequestParam String name,
-            @RequestParam(required = false) String description,
-            @RequestParam(required = false) String code,
-            @RequestParam(required = false) String title,
-            @RequestParam(required = false) LearningMode learningMode) {
-        try {
-            CourseTemplate template = courseTemplateService.createCourseTemplate(
-                    name, description, code, title, learningMode);
-            return ResponseEntity.ok(template);
-        } catch (GraphQLRequestExecutionException | GraphQLRequestPreparationException e) {
-            return ResponseEntity.internalServerError().build();
-        }
+    @Test
+    void testQueryWithCustomConfig() 
+            throws GraphQLRequestExecutionException, GraphQLRequestPreparationException {
+        String query = "{ courseTemplates { edges { node { id name } } } }";
+        Query response = queryExecutor.execWithBindValues(query, new HashMap<>());
+        assertNotNull(response);
     }
 }
 ```
@@ -397,9 +518,15 @@ public class CourseTemplateController {
 
 2. **Parameters**: Use `?parameterName` in the query string for optional parameters and `&parameterName` for mandatory parameters. Then provide the values in the parameters Map.
 
-3. **Error Handling**: Always check the `errors` field in mutation responses to handle validation errors gracefully.
+3. **Error Handling**: Always check the `errors` field in mutation responses to handle validation errors gracefully. In tests, use `assertNull()` or `assertTrue(isEmpty())` to verify no errors occurred.
 
 4. **Pagination**: The `courseTemplates` query returns a `CourseTemplateConnection` which uses a cursor-based pagination pattern with `edges` and `pageInfo`.
 
 5. **Spring Auto-Configuration**: The library includes Spring Boot auto-configuration, so `QueryExecutor` and `MutationExecutor` will be automatically available as Spring beans when the library is on the classpath.
+
+6. **Test Configuration**: Use `src/test/resources/application.properties` or `application.yml` to configure the GraphQL endpoint for tests, or use `@TestPropertySource` for test-specific configuration.
+
+7. **Assertions**: Use JUnit 5 assertions (`assertNotNull`, `assertEquals`, `assertTrue`, etc.) to verify the results of your GraphQL operations.
+
+8. **Test Isolation**: Consider using unique identifiers (like timestamps) in test data to avoid conflicts between test runs.
 
