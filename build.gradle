@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+    id 'com.graphql-java-generator.graphql-gradle-plugin' version '2.9'
+    id 'maven-publish'
+}
+
+group = 'com.example'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.graphql-java:graphql-java:20.0'
+    implementation 'com.graphql-java-generator:graphql-java-client-runtime:2.9'
+}
+
+graphql {
+    schemaFileFolder = new File('src/main/resources')
+    schemaFilePattern = 'schema.graphqls'
+    packageName = 'com.fsi.tm2poc.graphql.client'
+    mode = 'client'
+}
+
+tasks.named('sourcesJar') {
+    dependsOn 'graphqlGenerateCode'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            
+            pom {
+                name = 'GraphQL Client'
+                description = 'Generated GraphQL client from schema'
+            }
+        }
+    }
+    
+    repositories {
+        // Configure your Maven repository here
+        // Example:
+        // maven {
+        //     url = uri('https://your.maven.repo/url')
+        //     credentials {
+        //         username = project.findProperty('mavenUsername') ?: ''
+        //         password = project.findProperty('mavenPassword') ?: ''
+        //     }
+        // }
+    }
+}
+
