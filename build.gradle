@@ -47,6 +47,7 @@ publishing {
     }
     
     repositories {
+        mavenLocal()
         // Configure your Maven repository here
         // Example:
         // maven {
