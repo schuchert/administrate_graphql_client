@@ -32,6 +32,7 @@ graphql {
 
 tasks.named('sourcesJar') {
     dependsOn 'graphqlGenerateCode'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 publishing {
